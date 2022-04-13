@@ -5,7 +5,7 @@ import json
 import csv
 from bs4 import BeautifulSoup
 from datetime import datetime
-from handlers import PreviousMatchHandlers
+from .handlers import PreviousMatchHandlers
 
 
 class ScheduledMatches:
@@ -365,8 +365,3 @@ class ScheduledMatch:
             | offsides. {away.offsides()['avg']}
         
         """
-
-
-matches = ScheduledMatches()
-for match in matches.day_matches(date='2022-04-13'):
-    print(match.describe())
