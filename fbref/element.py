@@ -3,8 +3,10 @@ import requests
 import re
 import json
 import csv
-from bs4 import BeautifulSoup
 from datetime import datetime
+import time
+from collections import Counter
+from bs4 import BeautifulSoup
 from .handlers import PreviousMatchHandlers
 
 
@@ -21,7 +23,9 @@ class ScheduledMatches:
     def _handle_date(self, date) -> str:
         
         if not date:
-            return datetime.now().strftime('YYYY-MM-DD')
+            return datetime.now().strftime('%Y-%m-%d')
+        else:
+            return date
 
     def day_matches(self, date) -> list:
         """Return matches from specified date.
@@ -47,17 +51,23 @@ class ScheduledMatches:
                     data = row.find_all('td')
                     match_dict = {stat.attrs['data-stat']: stat for stat in data}
 
+                    venue_epoch = match_dict.get('time').next_element.get('data-venue-epoch')
                     # set match attributes
                     match.competition = competition
-                    match.date = match_dict.get('time').text
                     match.home = match_dict.get('squad_a').text
                     match.away = match_dict.get('squad_b').text
                     match.score = match_dict.get('score').text
                     match.venue = match_dict.get('venue').text
 
+                    # convert epoch to timezone
+                    if venue_epoch:
+                        match.time = time.strftime('%H:%M',time.localtime(int(venue_epoch)))
+                    else:
+                        match.time = '00:00'
+
                     # parse name when country comes first
                     match.away = re.sub('^[a-z]+\s', '', match.away)
-                    match.home = re.sub('\s+[a-z]{2}$', '', match.home)
+                    match.home = re.sub('\s+[a-z]{2,3}$', '', match.home)
 
                     home_a = match_dict.get('squad_a').find('a')
                     away_a = match_dict.get('squad_b').find('a')
@@ -69,7 +79,7 @@ class ScheduledMatches:
         else:
             raise AttributeError(f"Can't collect matches. See error:\n {rsp.text}")
 
-        return day_matches
+        return sorted(day_matches, key = lambda i: i.time)
 
 
 class PreviousMatch:
@@ -124,8 +134,8 @@ class Squad(PreviousMatchHandlers):
             # parse name when country comes first or at the end
             previous_match.opponent = re.sub('^[a-z]+\s', '', previous_match.opponent)
 
-            previous_match.goals_for = int(match.get('goals_for').text)
-            previous_match.goals_against = int(match.get('goals_against').text)
+            previous_match.goals_for = int(match.get('goals_for').text.split(' ')[0])
+            previous_match.goals_against = int(match.get('goals_against').text.split(' ')[0])
             previous_match.formation = match.get('formation').text
             previous_match.possession = float(match.get('possession').text) if match.get('possession').text else None 
             previous_match.captain = match.get('captain').text
@@ -238,6 +248,58 @@ class Squad(PreviousMatchHandlers):
 
         return {'total': total, 'avg': avg}
 
+        
+    def clean_sheets(self) -> int:
+        """ """
+        total = 0
+
+        for match in self.history:
+            if match.goals_against=='0':
+                total+=1
+
+        return total
+
+    def possible_card(self) -> str:
+        
+        for match in self.history:
+            match_summary = match.match_summary
+            cards = [x['player'] if x['eventtype']=='Yellow' else None for x in match_summary]
+            card_players = Counter(cards)
+            card_players.pop(None, None)
+        
+            try:
+                if card_players.most_common(1)[0][1]>1:
+                    return f'{card_players.most_common(1)[0][0]} [{card_players.most_common(1)[0][1]}]'
+                else:
+                    return ''
+            except IndexError:
+                return ''
+
+    def cards(self) -> int:
+        events = []
+        
+        for match in self.history:
+            match_summary = match.match_summary
+            events.extend([x['eventtype'] for x in match_summary])
+
+        return events.count('Yellow')/len(self.history)
+
+    def possible_striker(self) -> str:
+        
+        for match in self.history:
+            match_summary = match.match_summary
+            goals = [x['player'] if x['eventtype']=='Goal' else None for x in match_summary]
+            strikers = Counter(goals)
+            strikers.pop(None, None)
+
+            try:
+                if strikers.most_common(1)[0][1]>1:
+                    return f'{strikers.most_common(1)[0][0]} [{strikers.most_common(1)[0][1]}]'
+                else:
+                    return ''
+            except IndexError:
+                return ''
+
     def to_dict(self) -> list:
         
         team_history = []
@@ -307,7 +369,7 @@ class ScheduledMatch:
         self.home = str
         self.away = str
         self.score = str
-        self.date = str
+        self.time = str
         self.venue = str
         self._home_ref = str
         self._away_ref = str
@@ -315,12 +377,12 @@ class ScheduledMatch:
     def display(self) -> str:
         return f"""=====************=====
         🏆 {self.competition} 
-        ⚽️ {self.date}
+        ⚽️ {self.time}
         {self.home} X {self.away}
         🏟  {self.venue}
         """
 
-    def home_stats(self, previous_matches: int, competitions: str, venue= str) -> Squad:
+    def home_stats(self, previous_matches: int, competitions: str, venue: str) -> Squad:
         """Return statistics from Home team last N `~previous_matches` games.
 
         :params previous_matches: number of matches to considerate on summary.
@@ -330,7 +392,7 @@ class ScheduledMatch:
 
         return squad
     
-    def away_stats(self, previous_matches: int, competitions: str, venue= str) -> Squad:
+    def away_stats(self, previous_matches: int, competitions: str, venue: str) -> Squad:
         """Return statistics from Away team last N `~previous_matches` games.
 
         :params previous_matches: number of matches to considerate on summary.
@@ -340,28 +402,44 @@ class ScheduledMatch:
 
         return squad
     
-    def describe(self) -> str:
-        home = self.home_stats(previous_matches=5, competitions='all', venue='any')
-        away = self.away_stats(previous_matches=5, competitions='all', venue='any')
+    def describe(self, previous_matches: int) -> str:
+        home = self.home_stats(previous_matches=previous_matches, competitions='all', venue='any')
+        away = self.away_stats(previous_matches=previous_matches, competitions='all', venue='any')
+        home_results = home.results()
+        away_results = away.results()
 
         return f"""
-            =====*******************************=====
+            =====**************************=====
             🏆 {self.competition} 
-            ⚽️ {self.date}
+            ⚽️ {self.time}
             🏟  {self.venue}
             |---------------------------------------|
             | {self.home}
-            | goals. {home.goals_for()['avg']}
-            | corners. {home.corners()['avg']}
-            | fouls. {home.fouls()['avg']}
-            | shots. {home.shots()['avg']}
-            | offsides. {home.offsides()['avg']}
+            | ⚔️  partidas analisadas. {len(home.history)}
+            | 🎯 V {home_results['W']} | D {home_results['L']} | E {home_results['D']} |
+            | 🥅 gols. {home.goals_for()['avg']}
+            | ❌ gols sofridos. {home.goals_against()['avg']}
+            | 🧤 clean sheets. {home.clean_sheets()}
+            | ⛳️ escanteios. {home.corners()['avg']}
+            | 👊 faltas. {home.fouls()['avg']}
+            | 🟨 cartões. {home.cards()}
+            | 👟 chutes. {home.shots()['avg']}
+            | 🚷 impedimentos. {home.offsides()['avg']}
+            | 📌 possivel cartão. {home.possible_card()}
+            | ✅ possivel marcador. {home.possible_striker()}
             |---------------------------------------|
             | {self.away}
-            | goals. {away.goals_for()['avg']}
-            | corners. {away.corners()['avg']}
-            | fouls. {away.fouls()['avg']}
-            | shots. {away.shots()['avg']}
-            | offsides. {away.offsides()['avg']}
+            | ⚔️  partidas analisadas. {len(away.history)}
+            | 🎯 V {away_results['W']} | D {away_results['L']} | E {away_results['D']} |
+            | 🥅 gols. {away.goals_for()['avg']}
+            | ❌ gols sofridos. {away.goals_against()['avg']}
+            | 🧤 clean sheets. {away.clean_sheets()}
+            | ⛳️ escanteios. {away.corners()['avg']}
+            | 👊 faltas cometidas. {away.fouls()['avg']}
+            | 🟨 cartões. {away.cards()}
+            | 👟 chutes. {away.shots()['avg']}
+            | 🚷 impedimentos. {away.offsides()['avg']}
+            | 📌 possivel cartão. {away.possible_card()}
+            | ✅ possivel marcador. {away.possible_striker()}
         
         """

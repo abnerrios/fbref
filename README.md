@@ -17,22 +17,30 @@ pip install -e . --no-build-isolation --no-use-pep517
 # Quick Start
 
 ```python
+from datetime import datetime
 from fbref import FbrefDayMatches
 
 fdm = FbrefDayMatches()
-day_matches = fdm.day_matches(date='2022-03-13') #date format must be YYYY-MM-DD format
+date = datetime.now().strftime('%Y-%m-%d')
+day_matches = fdm.day_matches(date=date) #date format must be YYYY-MM-DD format
 
 for match in day_matches:
   # return average stats for match squads
-  print(match.describe())
+  print(match.describe(previous_matches=7))
 
   # -- export history data from squads
   # save data into a .csv file
-  home_team = match.home_stats()
+
+  # -- match.home_stats
+  # : params previous_matches: int 
+  # : params competitions: str ['all', 'same'] 
+  # : params venue: str ['home', 'away', 'any']
+
+  home_team = match.home_stats(previous_matches=5, competitions='all' , venue='any')
   home_team.to_csv(f'{home_team.name}.csv')
   home_history = home_team.to_dict()
 
-  away_team = match.away_stats()
+  away_team = match.away_stats(previous_matches=5, competitions='same' , venue='away')
   away_team.to_csv(f'{away_team.name}.csv')
   home_history = home_team.to_dict()
 

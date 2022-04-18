@@ -49,7 +49,7 @@ class PreviousMatchHandlers(object):
 
         url = urljoin('https://fbref.com/', match_url)
         rsp = requests.request('GET', url)
-        cleanr = re.compile('<.*?>|/|\n|\t|\xa0|—|\d+%|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{a,6});')
+        cleanr = re.compile('<.*?>|/|\n|\t|\xa0|—|\d+%|%|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{a,6});')
         venue_event_class = 'a' if venue=='Home' else 'b'
 
         if rsp.status_code<400:
@@ -69,7 +69,7 @@ class PreviousMatchHandlers(object):
                 # clean simbols and accuracy of text
                 shots_text = re.sub(cleanr,'',shots_text)
                 match_report['shots'] = int(shots_text.split(' of ')[1])
-                match_report['shots_on_target'] = int(shots_text.split(' of ')[0])
+                match_report['shots_on_target'] = int(re.sub(cleanr,'',shots_text.split(' of ')[0]))
 
             team_stats_extra = soup.find('div', attrs={'id': 'team_stats_extra'})
 
