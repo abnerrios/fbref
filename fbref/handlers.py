@@ -5,35 +5,75 @@ from bs4 import BeautifulSoup
 
 
 class PreviousMatchHandlers(object):
-    def _handle_played_matches(self, rows: list) -> list:
+
+    def _handle_first_half(self, event: dict) -> bool:
+        if int(event['minute'][:2])<46:
+            return True
+        
+        return False
+
+    def _handle_second_half(self, event: dict) -> bool:
+        if int(event['minute'][:2])>45:
+            return True
+        
+        return False
+
+    def _handle_played_matches(self, rows: list, competitions: str, venue: str) -> list:
         matches = []
+
+        ALL_COMP_ALL_VENUE = True if competitions=='all' and venue=='all' else False
+        ALL_COMP_SAME_VENUE = True if competitions=='all' and venue=='same' else False
+        SAME_COMP_ALL_VENUE = True if competitions=='same' and venue=='all' else False
+        SAME_COMP_SAME_VENUE = True if competitions=='same' and venue=='same' else False
 
         for row in rows:
             result = row.find('td', attrs={'data-stat': 'result'})
             if result.text:
                 data = row.find_all('td')
                 match_dict = {stat.attrs['data-stat']: stat for stat in data}
-                matches.append(match_dict)
+                
+                if ALL_COMP_ALL_VENUE:
+                    matches.append(match_dict)
+
+                if ALL_COMP_SAME_VENUE:
+                    if match_dict['venue'].text==self._venue:
+                        matches.append(match_dict)
+
+                if SAME_COMP_ALL_VENUE:
+                    if match_dict['comp'].text==self._competition:
+                        matches.append(match_dict)
+
+                if SAME_COMP_SAME_VENUE:
+                    if match_dict['comp'].text==self._competition and match_dict['venue'].text==self._venue:
+                        matches.append(match_dict)
 
         return matches
 
-    def _handle_previous_matches(self, squad_url, previous_matches) -> list:
+    def _handle_previous_matches(self, squad_url, previous_matches, competitions, venue) -> list:
 
         last_matches = []
         rsp = requests.request('GET', squad_url)
         content = rsp.content
         soup = BeautifulSoup(content, 'html.parser')
-        matchlogs = soup.find('div', attrs={'id': 'div_matchlogs_for'})
-        matchlogs_table = matchlogs.find('tbody')
-        rows = matchlogs_table.find_all('tr')
+        record = soup.find('strong', text='Record:')
+        matchlogs = soup.find('table', attrs={'id': 'matchlogs_for'})
 
-        matches = self._handle_played_matches(rows)
-        matches.reverse()
+        if matchlogs:
+            matchlogs_table = matchlogs.find('tbody')
+            rows = matchlogs_table.find_all('tr')
 
-        for i in range(previous_matches):
-            if i<len(matches):
-                match = matches[i] 
-                last_matches.append(match)
+            try:
+                self.position = re.search(r'(\d+)[a-z]{2}',record.next_sibling)[0]
+            except TypeError:
+                self.position = ''
+                
+            matches = self._handle_played_matches(rows, competitions, venue)
+            matches.reverse()
+
+            for i in range(previous_matches):
+                if i<len(matches):
+                    match = matches[i] 
+                    last_matches.append(match)
 
         return last_matches
 

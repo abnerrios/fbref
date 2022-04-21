@@ -108,11 +108,15 @@ class Squad(PreviousMatchHandlers):
         self.name = re.sub('\s+[a-z]{2}$', '', name)
         self._competition = competition
         self._venue = venue
+        self.position = None
         self.history = []
+    
+    def _per_game(self, number):
+        return round(number/len(self.history), 2)
 
     def match_summary(self, href, previous_matches, competitions, venue) -> None:
         VALID_COMPETITIONS = ['all', 'same']
-        VALID_VENUES = ['home', 'away', 'any']
+        VALID_VENUES = ['all', 'same']
 
         if competitions.lower() not in VALID_COMPETITIONS:
             raise ValueError("competitions: status must be one of %r." % VALID_COMPETITIONS)
@@ -121,7 +125,8 @@ class Squad(PreviousMatchHandlers):
             raise ValueError("venue: status must be one of %r." % VALID_VENUES)
 
         squad_url = urljoin('https://fbref.com', href)
-        previous_matches = self._handle_previous_matches(squad_url, previous_matches)
+
+        previous_matches = self._handle_previous_matches(squad_url, previous_matches, competitions, venue)
 
         for match in previous_matches:
             previous_match = PreviousMatch()
@@ -156,95 +161,107 @@ class Squad(PreviousMatchHandlers):
 
     def results(self) -> dict:
         """ """
-        results = {'W':0, 'L': 0, 'D': 0}
+        results = {'W':0, 'L': 0, 'D': 0, 'pts_pct': 0}
+        pts = 0
 
-        for match in self.history:
-            if match.result=='W':
-                results['W'] +=1
-            
-            if match.result=='L':
-                results['L'] +=1
-            
-            if match.result=='D':
-                results['D'] +=1
-        
+        if len(self.history)>0:
+            for match in self.history:
+                if match.result=='W':
+                    results['W'] +=1
+                    pts+=3
+                
+                if match.result=='L':
+                    results['L'] +=1
+                
+                if match.result=='D':
+                    results['D'] +=1
+                    pts+=1
+
+                results['pts_pct'] = round((pts/(len(self.history)*3))*100,0)
+    
         return results 
 
     def corners(self) -> dict:
         """ """
         total = 0
-        avg = None
+        avg = 0.0
 
-        for match in self.history:
-            if match.corners:
-                total+=match.corners
-        
-        avg = round(total/len(self.history), 2)
+        if len(self.history)>0:
+            for match in self.history:
+                if match.corners:
+                    total+=match.corners
+            
+            avg = self._per_game(total)
 
         return {'total': total, 'avg': avg}
 
     def fouls(self) -> dict:
         """ """
         total = 0
-        avg = None
+        avg = 0.0
 
-        for match in self.history:
-            if match.fouls:
-                total+=match.fouls
-        
-        avg = round(total/len(self.history), 2)
+        if len(self.history)>0:
+            for match in self.history:
+                if match.fouls:
+                    total+=match.fouls
+            
+            avg = self._per_game(total)
 
         return {'total': total, 'avg': avg}
 
     def offsides(self) -> dict:
         """ """
         total = 0
-        avg = None
+        avg = 0.0
 
-        for match in self.history:
-            if match.offsides:
-                total+=match.offsides
-        
-        avg = round(total/len(self.history), 2)
+        if len(self.history)>0:
+            for match in self.history:
+                if match.offsides:
+                    total+=match.offsides
+            
+            avg = self._per_game(total)
 
         return {'total': total, 'avg': avg}
         
     def shots(self) -> dict:
         """ """
         total = 0
-        avg = None
+        avg = 0.0
 
-        for match in self.history:
-            if match.shots:
-                total+=match.shots
-        
-        avg = round(total/len(self.history), 2)
+        if len(self.history)>0:
+            for match in self.history:
+                if match.shots:
+                    total+=match.shots
+            
+            avg = self._per_game(total)
 
         return {'total': total, 'avg': avg}
         
     def goals_for(self) -> dict:
         """ """
         total = 0
-        avg = None
+        avg = 0.0
 
-        for match in self.history:
-            if match.goals_for:
-                total+=match.goals_for
-        
-        avg = round(total/len(self.history), 2)
+        if len(self.history)>0:
+            for match in self.history:
+                if match.goals_for:
+                    total+=match.goals_for
+            
+            avg = self._per_game(total)
 
         return {'total': total, 'avg': avg}
         
     def goals_against(self) -> dict:
         """ """
         total = 0
-        avg = None
+        avg = 0.0
 
-        for match in self.history:
-            if match.goals_against:
-                total+=match.goals_against
-        
-        avg = round(total/len(self.history), 2)
+        if len(self.history)>0:
+            for match in self.history:
+                if match.goals_against:
+                    total+=match.goals_against
+            
+            avg = self._per_game(total)
 
         return {'total': total, 'avg': avg}
 
@@ -253,52 +270,92 @@ class Squad(PreviousMatchHandlers):
         """ """
         total = 0
 
-        for match in self.history:
-            if match.goals_against=='0':
-                total+=1
+        if len(self.history)>0:
+            for match in self.history:
+                if match.goals_against==0:
+                    total+=1
 
         return total
 
     def possible_card(self) -> str:
-        
-        for match in self.history:
-            match_summary = match.match_summary
-            cards = [x['player'] if x['eventtype']=='Yellow' else None for x in match_summary]
+        cards = []
+
+        if len(self.history)>0:
+            for match in self.history:
+                match_summary = match.match_summary
+                cards.extend([x['player'] if x['eventtype']=='Yellow' else None for x in match_summary])
+
             card_players = Counter(cards)
             card_players.pop(None, None)
+            
+            if len(card_players)>0 and card_players.most_common(1)[0][1]>1:
+                return f'{card_players.most_common(1)[0][0]} [{card_players.most_common(1)[0][1]}]'
         
-            try:
-                if card_players.most_common(1)[0][1]>1:
-                    return f'{card_players.most_common(1)[0][0]} [{card_players.most_common(1)[0][1]}]'
-                else:
-                    return ''
-            except IndexError:
-                return ''
-
-    def cards(self) -> int:
-        events = []
-        
-        for match in self.history:
-            match_summary = match.match_summary
-            events.extend([x['eventtype'] for x in match_summary])
-
-        return events.count('Yellow')/len(self.history)
+        return ''
 
     def possible_striker(self) -> str:
-        
-        for match in self.history:
-            match_summary = match.match_summary
-            goals = [x['player'] if x['eventtype']=='Goal' else None for x in match_summary]
+        goals = []
+        if len(self.history)>0:
+            for match in self.history:
+                match_summary = match.match_summary
+                goals.extend([x['player'] if x['eventtype']=='Goal' else None for x in match_summary])
+                
             strikers = Counter(goals)
             strikers.pop(None, None)
 
-            try:
-                if strikers.most_common(1)[0][1]>1:
-                    return f'{strikers.most_common(1)[0][0]} [{strikers.most_common(1)[0][1]}]'
-                else:
-                    return ''
-            except IndexError:
-                return ''
+            if len(strikers)>0 and strikers.most_common(1)[0][1]>1:
+                return f'{strikers.most_common(1)[0][0]} [{strikers.most_common(1)[0][1]}]'
+        
+        return ''
+            
+    def cards(self) -> int:
+        events = []
+        results = 0
+        
+        if len(self.history)>0:
+            for match in self.history:
+                match_summary = match.match_summary
+                events.extend([x['eventtype'] for x in match_summary])
+
+            results = self._per_game(events.count('Yellow'))
+        
+        return results
+
+    def cards_half(self) -> dict:
+        half = {'first': 0, 'second': 0}
+        events = []
+
+        if len(self.history)>0:
+            for match in self.history:
+                match_summary = match.match_summary
+                card_events = filter(lambda x: True if x['eventtype'] in ['Yellow','Red'] else False, match_summary)
+                events.extend(list(card_events))
+
+            first_half = list(filter(self._handle_first_half, events))
+            second_half = list(filter(self._handle_second_half, events))
+
+            half['first'] = self._per_game(len(first_half))
+            half['second'] = self._per_game(len(second_half))
+
+        return half
+
+    def goals_half(self) -> dict:
+        half = {'first': 0, 'second': 0}
+        events = []
+
+        if len(self.history)>0:
+            for match in self.history:
+                match_summary = match.match_summary
+                goal_events = filter(lambda x: True if x['eventtype']=='Goal' else False, match_summary)
+                events.extend(list(goal_events))
+
+            first_half = list(filter(self._handle_first_half, events))
+            second_half = list(filter(self._handle_second_half, events))
+
+            half['first'] = self._per_game(len(first_half))
+            half['second'] = self._per_game(len(second_half))
+
+        return half
 
     def to_dict(self) -> list:
         
@@ -403,20 +460,21 @@ class ScheduledMatch:
         return squad
     
     def describe(self, previous_matches: int) -> str:
-        home = self.home_stats(previous_matches=previous_matches, competitions='all', venue='any')
-        away = self.away_stats(previous_matches=previous_matches, competitions='all', venue='any')
+        home = self.home_stats(previous_matches=previous_matches, competitions='all', venue='same')
+        away = self.away_stats(previous_matches=previous_matches, competitions='all', venue='same')
         home_results = home.results()
         away_results = away.results()
 
         return f"""
-            =====**************************=====
+            |===========*Partida*============|
             🏆 {self.competition} 
             ⚽️ {self.time}
             🏟  {self.venue}
             |---------------------------------------|
-            | {self.home}
+              *{self.home} ({home.position})*
             | ⚔️  partidas analisadas. {len(home.history)}
-            | 🎯 V {home_results['W']} | D {home_results['L']} | E {home_results['D']} |
+            | 📊 V {home_results['W']} | D {home_results['L']} | E {home_results['D']} |
+            | 🎯 aproveitamento. {home_results['pts_pct']}%
             | 🥅 gols. {home.goals_for()['avg']}
             | ❌ gols sofridos. {home.goals_against()['avg']}
             | 🧤 clean sheets. {home.clean_sheets()}
@@ -425,12 +483,17 @@ class ScheduledMatch:
             | 🟨 cartões. {home.cards()}
             | 👟 chutes. {home.shots()['avg']}
             | 🚷 impedimentos. {home.offsides()['avg']}
-            | 📌 possivel cartão. {home.possible_card()}
-            | ✅ possivel marcador. {home.possible_striker()}
+            | 📌 olho no cartão. {home.possible_card()}
+            | ✅ pode marcar. {home.possible_striker()}
+            | ⚽️🕡 gols 1º tempo. {home.goals_half()['first']}
+            | ⚽️🕛 gols 2º tempo. {home.goals_half()['second']}
+            | 🟨🕡 cartões 1º tempo. {home.cards_half()['first']}
+            | 🟨🕛 cartões 2º tempo. {home.cards_half()['second']}
             |---------------------------------------|
-            | {self.away}
+              *{self.away} ({away.position})*
             | ⚔️  partidas analisadas. {len(away.history)}
-            | 🎯 V {away_results['W']} | D {away_results['L']} | E {away_results['D']} |
+            | 📊 V {away_results['W']} | D {away_results['L']} | E {away_results['D']} |
+            | 🎯 aproveitamento. {away_results['pts_pct']}%
             | 🥅 gols. {away.goals_for()['avg']}
             | ❌ gols sofridos. {away.goals_against()['avg']}
             | 🧤 clean sheets. {away.clean_sheets()}
@@ -439,7 +502,11 @@ class ScheduledMatch:
             | 🟨 cartões. {away.cards()}
             | 👟 chutes. {away.shots()['avg']}
             | 🚷 impedimentos. {away.offsides()['avg']}
-            | 📌 possivel cartão. {away.possible_card()}
-            | ✅ possivel marcador. {away.possible_striker()}
+            | 📌 olho no cartão. {away.possible_card()}
+            | ✅ pode marcar. {away.possible_striker()}
+            | ⚽️🕡 gols 1º tempo. {away.goals_half()['first']}
+            | ⚽️🕛 gols 2º tempo. {away.goals_half()['second']}
+            | 🟨🕡 cartões 1º tempo. {away.cards_half()['first']}
+            | 🟨🕛 cartões 2º tempo. {away.cards_half()['second']}
         
         """
