@@ -63,7 +63,7 @@ class PreviousMatchHandlers(object):
             rows = matchlogs_table.find_all('tr')
 
             try:
-                self.position = re.search(r'(\d+)[a-z]{2}',record.next_sibling)[0]
+                self.position = re.search(r'(\d+)[a-z]{2}',record.next_sibling)[0] if record else ''
             except TypeError:
                 self.position = ''
                 

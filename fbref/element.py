@@ -47,35 +47,40 @@ class ScheduledMatches:
                 rows = tbody.find_all('tr')
 
                 for row in rows:
-                    match = ScheduledMatch()
-                    data = row.find_all('td')
-                    match_dict = {stat.attrs['data-stat']: stat for stat in data}
+                    if not row.attrs.get('class'):
+                        match = ScheduledMatch()
+                        data = row.find_all('td')
+                        match_dict = {stat.attrs['data-stat']: stat for stat in data}
 
-                    venue_epoch = match_dict.get('time').next_element.get('data-venue-epoch')
-                    # set match attributes
-                    match.competition = competition
-                    match.home = match_dict.get('squad_a').text
-                    match.away = match_dict.get('squad_b').text
-                    match.score = match_dict.get('score').text
-                    match.venue = match_dict.get('venue').text
+                        try:
+                            venue_epoch = match_dict.get('time').next_element.get('data-venue-epoch')
+                        except AttributeError:
+                            venue_epoch = None
 
-                    # convert epoch to timezone
-                    if venue_epoch:
-                        match.time = time.strftime('%H:%M',time.localtime(int(venue_epoch)))
-                    else:
-                        match.time = '00:00'
+                        # set match attributes
+                        match.competition = competition
+                        match.home = match_dict.get('squad_a').text
+                        match.away = match_dict.get('squad_b').text
+                        match.score = match_dict.get('score').text
+                        match.venue = match_dict.get('venue').text
 
-                    # parse name when country comes first
-                    match.away = re.sub('^[a-z]+\s', '', match.away)
-                    match.home = re.sub('\s+[a-z]{2,3}$', '', match.home)
+                        # convert epoch to timezone
+                        if venue_epoch:
+                            match.time = time.strftime('%H:%M',time.localtime(int(venue_epoch)))
+                        else:
+                            match.time = '00:00'
 
-                    home_a = match_dict.get('squad_a').find('a')
-                    away_a = match_dict.get('squad_b').find('a')
+                        # parse name when country comes first
+                        match.away = re.sub('^[a-z]+\s', '', match.away)
+                        match.home = re.sub('\s+[a-z]{2,3}$', '', match.home)
 
-                    match._home_ref = home_a.attrs.get('href')
-                    match._away_ref = away_a.attrs.get('href')
+                        home_a = match_dict.get('squad_a').find('a')
+                        away_a = match_dict.get('squad_b').find('a')
 
-                    day_matches.append(match)
+                        match._home_ref = home_a.attrs.get('href')
+                        match._away_ref = away_a.attrs.get('href')
+
+                        day_matches.append(match)
         else:
             raise AttributeError(f"Can't collect matches. See error:\n {rsp.text}")
 
