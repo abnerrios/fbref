@@ -465,8 +465,8 @@ class ScheduledMatch:
         return squad
     
     def describe(self, previous_matches: int) -> str:
-        home = self.home_stats(previous_matches=previous_matches, competitions='all', venue='same')
-        away = self.away_stats(previous_matches=previous_matches, competitions='all', venue='same')
+        home = self.home_stats(previous_matches=previous_matches, competitions='all', venue='all')
+        away = self.away_stats(previous_matches=previous_matches, competitions='all', venue='all')
         home_results = home.results()
         away_results = away.results()
 
