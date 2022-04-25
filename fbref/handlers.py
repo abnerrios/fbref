@@ -1,3 +1,5 @@
+
+import sys
 import requests
 import re
 from urllib.parse import urljoin
@@ -35,12 +37,10 @@ class PreviousMatchHandlers(object):
                 if ALL_COMP_ALL_VENUE:
                     matches.append(match_dict)
 
-                if ALL_COMP_SAME_VENUE:
-                    if match_dict['venue'].text==self._venue:
+                if ALL_COMP_SAME_VENUE and match_dict['venue'].text==self._venue:
                         matches.append(match_dict)
 
-                if SAME_COMP_ALL_VENUE:
-                    if match_dict['comp'].text==self._competition:
+                if SAME_COMP_ALL_VENUE and match_dict['comp'].text==self._competition:
                         matches.append(match_dict)
 
                 if SAME_COMP_SAME_VENUE:
@@ -159,5 +159,8 @@ class PreviousMatchHandlers(object):
                             'eventtype': event,
                             'player': player_event
                         })
+        else:
+            print(f'Erro ao coletar estatisticas {self.name}\nErro: {rsp.status_code} - {rsp.reason}')
+            sys.exit()
 
         return match_report

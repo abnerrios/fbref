@@ -157,7 +157,7 @@ class Squad(PreviousMatchHandlers):
             )
             previous_match.corners = match_report['corners']
             previous_match.shots = match_report['shots']
-            previous_match.shots_on_target = match_report['shots_on_target']
+            previous_match.shots_on_target = match_report['shots_on_target'] or 0
             previous_match.offsides = match_report['offsides']
             previous_match.fouls = match_report['fouls']
             previous_match.match_summary = match_report['summary']
@@ -255,6 +255,20 @@ class Squad(PreviousMatchHandlers):
             avg = self._per_game(total)
 
         return {'total': total, 'avg': avg}
+
+    def shots_to_goal(self) -> float:
+        goals = 0 
+        shots_on_target = 0
+
+        if len(self.history)>0:
+            for match in self.history:
+                goals+=match.goals_for
+                shots_on_target+=match.shots_on_target
+
+            if goals==0:
+                return 0.0
+            
+        return round(shots_on_target/goals,2)
         
     def goals_against(self) -> dict:
         """ """
@@ -487,6 +501,7 @@ class ScheduledMatch:
             | 👊 faltas. {home.fouls()['avg']}
             | 🟨 cartões. {home.cards()}
             | 👟 chutes. {home.shots()['avg']}
+            | 👟⚽️ chutes para gol (no alvo). {home.shots_to_goal()}
             | 🚷 impedimentos. {home.offsides()['avg']}
             | 📌 olho no cartão. {home.possible_card()}
             | ✅ pode marcar. {home.possible_striker()}
@@ -506,6 +521,7 @@ class ScheduledMatch:
             | 👊 faltas cometidas. {away.fouls()['avg']}
             | 🟨 cartões. {away.cards()}
             | 👟 chutes. {away.shots()['avg']}
+            | 👟⚽️ chutes para gol (no alvo). {away.shots_to_goal()}
             | 🚷 impedimentos. {away.offsides()['avg']}
             | 📌 olho no cartão. {away.possible_card()}
             | ✅ pode marcar. {away.possible_striker()}
