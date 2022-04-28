@@ -130,7 +130,6 @@ class Squad(PreviousMatchHandlers):
             raise ValueError("venue: status must be one of %r." % VALID_VENUES)
 
         squad_url = urljoin('https://fbref.com', href)
-
         previous_matches = self._handle_previous_matches(squad_url, previous_matches, competitions, venue)
 
         for match in previous_matches:
@@ -242,6 +241,20 @@ class Squad(PreviousMatchHandlers):
 
         return {'total': total, 'avg': avg}
         
+    def shots_on_target(self) -> dict:
+        """ """
+        total = 0
+        avg = 0.0
+
+        if len(self.history)>0:
+            for match in self.history:
+                if match.shots_on_target:
+                    total+=match.shots_on_target
+            
+            avg = self._per_game(total)
+
+        return {'total': total, 'avg': avg}
+        
     def goals_for(self) -> dict:
         """ """
         total = 0
@@ -264,12 +277,11 @@ class Squad(PreviousMatchHandlers):
             for match in self.history:
                 goals+=match.goals_for
                 shots_on_target+=match.shots_on_target
+        try:
+            return round(shots_on_target/goals,2)
+        except ZeroDivisionError:
+            return 0.0
 
-            if goals==0:
-                return 0.0
-            
-        return round(shots_on_target/goals,2)
-        
     def goals_against(self) -> dict:
         """ """
         total = 0
@@ -478,7 +490,7 @@ class ScheduledMatch:
 
         return squad
     
-    def describe(self, previous_matches: int) -> str:
+    def describe2(self, previous_matches: int) -> str:
         home = self.home_stats(previous_matches=previous_matches, competitions='all', venue='all')
         away = self.away_stats(previous_matches=previous_matches, competitions='all', venue='all')
         home_results = home.results()
@@ -500,7 +512,7 @@ class ScheduledMatch:
             | ⛳️ escanteios. {home.corners()['avg']}
             | 👊 faltas. {home.fouls()['avg']}
             | 🟨 cartões. {home.cards()}
-            | 👟 chutes. {home.shots()['avg']}
+            | 👟 chutes. {home.shots()['avg']} ({home.shots_on_target()['avg']})
             | 👟⚽️ chutes para gol (no alvo). {home.shots_to_goal()}
             | 🚷 impedimentos. {home.offsides()['avg']}
             | 📌 olho no cartão. {home.possible_card()}
@@ -520,7 +532,7 @@ class ScheduledMatch:
             | ⛳️ escanteios. {away.corners()['avg']}
             | 👊 faltas cometidas. {away.fouls()['avg']}
             | 🟨 cartões. {away.cards()}
-            | 👟 chutes. {away.shots()['avg']}
+            | 👟 chutes. {away.shots()['avg']} ({away.shots_on_target()['avg']})
             | 👟⚽️ chutes para gol (no alvo). {away.shots_to_goal()}
             | 🚷 impedimentos. {away.offsides()['avg']}
             | 📌 olho no cartão. {away.possible_card()}
@@ -529,5 +541,43 @@ class ScheduledMatch:
             | ⚽️🕛 gols 2º tempo. {away.goals_half()['second']}
             | 🟨🕡 cartões 1º tempo. {away.cards_half()['first']}
             | 🟨🕛 cartões 2º tempo. {away.cards_half()['second']}
+        
+        """
+
+    def describe(self, previous_matches: int) -> str:
+        home = self.home_stats(previous_matches=previous_matches, competitions='all', venue='same')
+        away = self.away_stats(previous_matches=previous_matches, competitions='all', venue='same')
+        home_results = home.results()
+        away_results = away.results()
+
+        return f"""
+            |===========*Partida*============|
+            🏆 {self.competition} 
+            ⚽️ {self.time}
+            🏟  {self.venue}
+            |---------------------------------------|
+              *{self.home} ({home.position})* x *{self.away} ({away.position})*
+            | 📊 {home_results['W']}-{home_results['L']}-{home_results['D']} x {away_results['W']}-{away_results['L']}-{away_results['D']} [V-D-E]|
+            | 🎯 aproveitamento. {home_results['pts_pct']}% x {away_results['pts_pct']}%
+            | 🥅 gols. {home.goals_for()['avg']} x {away.goals_for()['avg']}
+            | ❌ gols sofridos. {home.goals_against()['avg']} x {away.goals_against()['avg']}
+            | 🧤 clean sheets. {home.clean_sheets()} x {away.clean_sheets()}
+            | ⛳️ escanteios. {home.corners()['avg']} x {away.corners()['avg']}
+            | 👊 faltas. {home.fouls()['avg']} x {away.fouls()['avg']}
+            | 🟨 cartões. {home.cards()} x {away.cards()}
+            | 👟 chutes. {home.shots()['avg']} ({home.shots_on_target()['avg']}) x {away.shots()['avg']} ({away.shots_on_target()['avg']})
+            | 👟⚽️ chutes para gol (no alvo). {home.shots_to_goal()} x {away.shots_to_goal()}
+            | 🚷 impedimentos. {home.offsides()['avg']} x {away.offsides()['avg']}
+            | 📌 para receber cartão:
+                {home.possible_card()} *{self.home}*
+                {away.possible_card()} *{self.away}*
+            | ✅ para marcar: 
+                {home.possible_striker()} *{self.home}*
+                {away.possible_striker()} *{self.away}*
+            | ⚽️🕡 gols 1º tempo. {home.goals_half()['first']} x {away.goals_half()['first']}
+            | ⚽️🕛 gols 2º tempo. {home.goals_half()['second']} x {away.goals_half()['second']}
+            | 🟨🕡 cartões 1º tempo. {home.cards_half()['first']} x {away.cards_half()['first']}
+            | 🟨🕛 cartões 2º tempo. {home.cards_half()['second']} x {away.cards_half()['second']}
+            |---------------------------------------|
         
         """

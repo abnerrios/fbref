@@ -2,6 +2,7 @@
 import sys
 import requests
 import re
+import time
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
@@ -86,6 +87,8 @@ class PreviousMatchHandlers(object):
             'fouls': None,
             'summary': []
         }
+        # add waiting time to avoid block
+        time.sleep(0)
 
         url = urljoin('https://fbref.com/', match_url)
         rsp = requests.request('GET', url)
